@@ -44,7 +44,7 @@ class EITItemExtractor():
         nlp.add_pipe("syllables", after="tagger", config={"lang": "de_DE"})
         self.pipeline = nlp
 
-    def GenerateUniqueRandomInt(self) -> int:
+    def generate_unique_random_int(self) -> int:
         """Generates a random integer, not included in the checkedIndeces set and adds it to it"""
         # Throw an error if we've checked all indeces
         if (len(self.sentences) == len(self.checkedIndeces)):
@@ -56,7 +56,7 @@ class EITItemExtractor():
 
         return randInt
 
-    def CountSyllablesInSentence(self, sentence:str) -> tuple[spacy.__doc__, int]:
+    def count_syllables(self, sentence:str) -> tuple[spacy.__doc__, int]:
         """Counts up all syllables in the given sentece and returns the sum and the Spacy-Doc"""
         doc = self.pipeline(sentence)
         syllableSum = sum((token._.syllables_count) or 0 for token in doc)
@@ -73,9 +73,9 @@ class EITItemExtractor():
         # While item rows are less than needed items
         while (len(self.items.index) < maxItemCount):
             # Get a random new sentence from the list
-            randInt = self.GenerateUniqueRandomInt()
+            randInt = self.generate_unique_random_int()
             sentence = self.sentences[randInt]
-            doc, syllableCount = self.CountSyllablesInSentence(sentence)
+            doc, syllableCount = self.count_syllables(sentence)
 
             # Continue to next cycle if syllableCount is not in the boundaries or all items of current sentence length are already selected
             if ((syllableCount < minLen) or (syllableCount > maxLen) or (len(self.items.query(f"Syllables == {syllableCount}").index) >= perLength)):

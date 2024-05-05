@@ -1,9 +1,11 @@
 import re
 import random
 import pandas as pd
+import numpy as np
 import pickle
 import spacy
 from spacy_syllables import SpacySyllables
+from typing import Any
 
 class EITItemExtractor():
     def __init__(self) -> None:
@@ -11,7 +13,14 @@ class EITItemExtractor():
         self.lexicon = {}
         self.checkedIndeces = set()
         self.pipeline = None
-        self.items = pd.DataFrame(columns=['Sentence', 'Syllables', 'LowestFreq', 'Constraint1'])
+        self.items = pd.DataFrame(columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'Constraint1'])
+        # Max - Min Combined Zipf = 7.37 - 0.7 (7 - 1 if rounded)
+        # Hard-coded for now - maybe change later 
+        self.zipfBoundaries = {
+            0: (4, 1000), 
+            1: (2.5, 4),
+            2: (0, 2.5)
+        }
     
     def load_lexicon(self, filename:str, isPickled:bool) -> None:
         """Loads the lexicon from an excel spreadsheet or a precompiled binary (depending on the isPickled flag)"""
@@ -25,8 +34,6 @@ class EITItemExtractor():
             self.lexicon = dict(zip(df.Word, (df.ZipfSUBTLEX + df.ZipfGoogle)/2))
             with open(f"{filename}.pickle", 'wb') as file:
                 pickle.dump(self.lexicon, file, protocol=pickle.HIGHEST_PROTOCOL)
-        
-        print(self.lexicon['die'])
             
     def load_sentences(self, filenames:list) -> None:
         """Loads all sentences from an array of sources and does some light formatting"""
@@ -56,16 +63,34 @@ class EITItemExtractor():
 
         return randInt
 
-    def count_syllables(self, sentence:str) -> tuple[spacy.__doc__, int]:
+    def count_syllables(self, sentence:str) -> tuple[Any, int]:
         """Counts up all syllables in the given sentece and returns the sum and the Spacy-Doc"""
         doc = self.pipeline(sentence)
         syllableSum = sum((token._.syllables_count) or 0 for token in doc)
         return doc, syllableSum
 
+    def find_word_with_lowest_zipf(self, doc:Any) -> tuple[str, float]:
+        """Returns a tuple of a word and its zipf score, for the lowest scoring word in the sentence (the least frequent one)"""
+        tokenZipfs = {}
+        for token in doc:
+            # Check for text in the lexicon
+            zipf = self.lexicon.get(token.text, 999)
+            tokenZipfs[token.text] = zipf
+
+        return min(tokenZipfs.items(), key=lambda x: x[1])
+    
+    def create_zipf_categories(self, min:int, max:int, chunks:int) -> dict:
+        """Creates a dictionary of sentence lengths with their respective category"""
+        # Split the range into #chunks# equal parts
+        splitRange = np.array_split(range(min, max+1), chunks)
+
+        return { length: outerIndex for outerIndex, innerList in enumerate(splitRange) for length in innerList}
+
+
+
     def choose_items(self, minLen:int, maxLen:int, perLength:int) -> None:
         """The main method for item selection"""
         # Wortfrequenz: Zipf-Score des seltensten Wortes sinkt mit steigender Satzlänge (d.h. längere Sätze sollen auch seltenere Wörter enthalten)
-        # Max - Min Combined Zipf = 7.37 - 0.7 (7 - 1 if rounded)
         # Constraints
 
         maxItemCount = (maxLen - minLen + 1) * perLength
@@ -81,8 +106,16 @@ class EITItemExtractor():
             if ((syllableCount < minLen) or (syllableCount > maxLen) or (len(self.items.query(f"Syllables == {syllableCount}").index) >= perLength)):
                 continue
             
-            # columns=['Sentence', 'Syllables', 'LowestFreq', 'Constraint1']
-            toConcat = pd.DataFrame([[sentence, syllableCount, '3', '4']], columns=self.items.columns)
+            lowestZipf = self.find_word_with_lowest_zipf(doc)
+            zipfCategoriesDict = self.create_zipf_categories(minLen, maxLen, chunks = 3)
+            zipfBoundary = self.zipfBoundaries[zipfCategoriesDict[syllableCount]]
+
+            # Continue to next cycle if the lowest Zipf score does not fit in the boundary, corresponding to the sentence length
+            if ((lowestZipf[1] < zipfBoundary[0]) or (lowestZipf[1] > zipfBoundary[1])):
+                continue
+
+            # columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'Constraint1']
+            toConcat = pd.DataFrame([[sentence, syllableCount, lowestZipf[0], lowestZipf[1], '4']], columns=self.items.columns)
             self.items = pd.concat([toConcat, self.items], ignore_index=True)
         
         self.items.to_excel("output.xlsx", sheet_name= "Sentences")

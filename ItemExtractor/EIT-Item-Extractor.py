@@ -17,7 +17,7 @@ class EITItemExtractor():
         self.lexicon = {}
         self.checkedIndeces = set()
         self.pipeline = None
-        self.items = pd.DataFrame(columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'Constraint1'])
+        self.items = pd.DataFrame(columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'NoPropNouns', 'NoNumbers', 'HasVerb', 'NoAbbrev'])
         # Max - Min Combined Zipf = 7.37 - 0.7 (7 - 1 if rounded)
         # Hard-coded for now - maybe change later 
         self.zipfBoundaries = {
@@ -25,8 +25,8 @@ class EITItemExtractor():
             1: (5, 7),
             2: (4, 6),
             3: (3, 5),
-            4: (1, 3),
-            5: (0, 2.5)
+            4: (1.5, 3.5),
+            5: (0, 2.25)
         }
     
     def load_lexicon(self, filename:str, isPickled:bool) -> None:
@@ -95,6 +95,24 @@ class EITItemExtractor():
 
         return { length: outerIndex for outerIndex, innerList in enumerate(splitRange) for length in innerList}
 
+    def check_constraints(self, doc:Any)->tuple[bool,bool,bool,bool]:
+        """Checks for all extra constraints and return a bool for each:
+            1. Don't allow proper nouns (token.pos_ = PROPN)
+            2. Don't allow numbers (token.pos_ = NUM)
+            3. Don't allow sentences without verbs (token.pos_ = VERB)
+            4. Don't allow abbreviations ('.' in token.text AND token.pos_ =! PUNCT)
+        """ 
+        constraints = dict.fromkeys(["noPropNouns", "noNumbers", "noAbbrev"], True)
+        constraints.update(dict.fromkeys(["hasVerb"], False))
+        for token in doc:
+            if (token.pos_ == 'PROPN'): constraints['noPropNouns'] = False
+            if (token.pos_ == 'NUM'): constraints['noNumbers'] = False
+            if (('.' in token.text) and (token.pos_ != 'PUNCT')): constraints['noAbbrev'] = False
+            if (token.pos_ == 'VERB'): constraints['hasVerb'] = True
+
+
+        return constraints['noPropNouns'], constraints['noNumbers'], constraints['hasVerb'], constraints['noAbbrev']
+
 
 
     def choose_items(self, minLen:int, maxLen:int, perLength:int) -> None:
@@ -123,14 +141,13 @@ class EITItemExtractor():
             if ((lowestZipf[1] == 999) or (lowestZipf[1] < zipfBoundary[0]) or (lowestZipf[1] > zipfBoundary[1])):
                 continue
             
-            # Don't allow proper nouns (token.pos_ = PROPN)
-            # Don't allow numbers (token.pos_ = NUM)
-            # Don't allow sentences without verbs (token.pos_ = VERB)
-            # Don't allow abbreviations ('.' in token.text AND token.pos_ =! PUNCT)
+            # Constraints - all should be true, otherwise continue to next cycle
+            noPropNouns, noNumbers, hasVerb, noAbbrev = self.check_constraints(doc)
+            if (not (noPropNouns and noNumbers and hasVerb and noAbbrev)):
+                continue
 
-
-            # columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'Constraint1']
-            toConcat = pd.DataFrame([[sentence, syllableCount, lowestZipf[0], lowestZipf[1], '4']], columns=self.items.columns)
+            # columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'NoPropNouns', 'NoNumbers', 'HasVerb', 'NoAbbrev']
+            toConcat = pd.DataFrame([[sentence, syllableCount, lowestZipf[0], lowestZipf[1], noPropNouns, noNumbers, hasVerb, noAbbrev]], columns=self.items.columns)
             self.items = pd.concat([toConcat, self.items], ignore_index=True)
         
         self.items.to_excel("output.xlsx", sheet_name= "Sentences")

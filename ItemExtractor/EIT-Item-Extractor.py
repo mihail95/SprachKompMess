@@ -1,3 +1,6 @@
+from datetime import datetime
+start = datetime.now()
+
 import re
 import random
 import pandas as pd
@@ -6,6 +9,7 @@ import pickle
 import spacy
 from spacy_syllables import SpacySyllables
 from typing import Any
+
 
 class EITItemExtractor():
     def __init__(self) -> None:
@@ -17,9 +21,12 @@ class EITItemExtractor():
         # Max - Min Combined Zipf = 7.37 - 0.7 (7 - 1 if rounded)
         # Hard-coded for now - maybe change later 
         self.zipfBoundaries = {
-            0: (4, 1000), 
-            1: (2.5, 4),
-            2: (0, 2.5)
+            0: (6, 8), 
+            1: (5, 7),
+            2: (4, 6),
+            3: (3, 5),
+            4: (1, 3),
+            5: (0, 2.5)
         }
     
     def load_lexicon(self, filename:str, isPickled:bool) -> None:
@@ -29,9 +36,10 @@ class EITItemExtractor():
                 self.lexicon = pickle.load(file)
         else:
             df = pd.read_excel(f"{filename}.xlsx")
+            filteredDf = df[df['spell-check OK (1/0)'] == 1] 
             # self.lexicon = dict(zip(df.Word, zip(df.ZipfSUBTLEX, df.ZipfGoogle, (df.ZipfSUBTLEX + df.ZipfGoogle)/2)))
             # Constructs a dictionary like: { word: CombinedZipf }
-            self.lexicon = dict(zip(df.Word, (df.ZipfSUBTLEX + df.ZipfGoogle)/2))
+            self.lexicon = dict(zip(filteredDf.Word, (filteredDf.ZipfSUBTLEX + filteredDf.ZipfGoogle)/2))
             with open(f"{filename}.pickle", 'wb') as file:
                 pickle.dump(self.lexicon, file, protocol=pickle.HIGHEST_PROTOCOL)
             
@@ -75,6 +83,7 @@ class EITItemExtractor():
         for token in doc:
             # Check for text in the lexicon
             zipf = self.lexicon.get(token.text, 999)
+            if (zipf == 999): zipf = self.lexicon.get(token.lemma_, 999)
             tokenZipfs[token.text] = zipf
 
         return min(tokenZipfs.items(), key=lambda x: x[1])
@@ -107,12 +116,18 @@ class EITItemExtractor():
                 continue
             
             lowestZipf = self.find_word_with_lowest_zipf(doc)
-            zipfCategoriesDict = self.create_zipf_categories(minLen, maxLen, chunks = 3)
+            zipfCategoriesDict = self.create_zipf_categories(minLen, maxLen, chunks = 6)
             zipfBoundary = self.zipfBoundaries[zipfCategoriesDict[syllableCount]]
 
             # Continue to next cycle if the lowest Zipf score does not fit in the boundary, corresponding to the sentence length
-            if ((lowestZipf[1] < zipfBoundary[0]) or (lowestZipf[1] > zipfBoundary[1])):
+            if ((lowestZipf[1] == 999) or (lowestZipf[1] < zipfBoundary[0]) or (lowestZipf[1] > zipfBoundary[1])):
                 continue
+            
+            # Don't allow proper nouns (token.pos_ = PROPN)
+            # Don't allow numbers (token.pos_ = NUM)
+            # Don't allow sentences without verbs (token.pos_ = VERB)
+            # Don't allow abbreviations ('.' in token.text AND token.pos_ =! PUNCT)
+
 
             # columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'Constraint1']
             toConcat = pd.DataFrame([[sentence, syllableCount, lowestZipf[0], lowestZipf[1], '4']], columns=self.items.columns)
@@ -128,3 +143,11 @@ if __name__ == "__main__":
     itemExtractor.init_pipeline()
     itemExtractor.choose_items(minLen=7, maxLen=30, perLength=5)
     # Write sentences to file (sorted by length)
+
+    print("Program ended in: ", datetime.now() - start)
+
+    # TODO: Ask if searching the lexicon by lemma makes sense.
+    # TODO: Ask if splitting all lenghts into 3 equally big groups makes sense. More, less groups? Nor equal?
+    # TODO: How should the zipfs be divided between these groups?
+
+

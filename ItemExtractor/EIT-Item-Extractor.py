@@ -50,7 +50,10 @@ class EITItemExtractor():
                 for sentence in file:
                     currentSentence = sentence.replace("<i>", "").replace("</ i>", "").strip()
                     currentSentence = re.sub(r"^- ", "", currentSentence)
+                    currentSentence = re.sub(r"\.\.\.", " ", currentSentence)
+                    currentSentence = re.sub(r"\. \. \.", " ", currentSentence)
                     currentSentence = re.sub(r"^[0-9]*\t", "", currentSentence)
+                    currentSentence = re.sub(r"  ", " ", currentSentence)
                     self.sentences.append(currentSentence)
 
     def init_pipeline(self) -> None:
@@ -117,20 +120,21 @@ class EITItemExtractor():
 
     def choose_items(self, minLen:int, maxLen:int, perLength:int) -> None:
         """The main method for item selection"""
-        # Wortfrequenz: Zipf-Score des seltensten Wortes sinkt mit steigender Satzlänge (d.h. längere Sätze sollen auch seltenere Wörter enthalten)
-        # Constraints
 
+        cycleCount = 0
         maxItemCount = (maxLen - minLen + 1) * perLength
 
         # While item rows are less than needed items
         while (len(self.items.index) < maxItemCount):
+            cycleCount = cycleCount + 1
             # Get a random new sentence from the list
             randInt = self.generate_unique_random_int()
             sentence = self.sentences[randInt]
             doc, syllableCount = self.count_syllables(sentence)
 
             # Continue to next cycle if syllableCount is not in the boundaries or all items of current sentence length are already selected
-            if ((syllableCount < minLen) or (syllableCount > maxLen) or (len(self.items.query(f"Syllables == {syllableCount}").index) >= perLength)):
+            itemsOfCurrentLen = len(self.items.query(f"Syllables == {syllableCount}").index)
+            if ((syllableCount < minLen) or (syllableCount > maxLen) or (itemsOfCurrentLen >= perLength)):
                 continue
             
             lowestZipf = self.find_word_with_lowest_zipf(doc)
@@ -149,7 +153,9 @@ class EITItemExtractor():
             # columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'NoPropNouns', 'NoNumbers', 'HasVerb', 'NoAbbrev']
             toConcat = pd.DataFrame([[sentence, syllableCount, lowestZipf[0], lowestZipf[1], noPropNouns, noNumbers, hasVerb, noAbbrev]], columns=self.items.columns)
             self.items = pd.concat([toConcat, self.items], ignore_index=True)
+            print(f"{datetime.now() - start}: Item of length {syllableCount} has been added. ({itemsOfCurrentLen + 1}/{perLength})")
         
+        print(f"All items found after {cycleCount} cycles. ({maxItemCount} total items)")
         self.items.to_excel("output.xlsx", sheet_name= "Sentences")
             
 

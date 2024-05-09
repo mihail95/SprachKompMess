@@ -156,7 +156,7 @@ class EITItemExtractor():
             print(f"{datetime.now() - start}: Item of length {syllableCount} has been added. ({itemsOfCurrentLen + 1}/{perLength})")
         
         print(f"All items found after {cycleCount} cycles. ({maxItemCount} total items)")
-        self.items.to_excel("output.xlsx", sheet_name= "Sentences")
+        self.items.sort_values('Syllables', ascending=True).to_excel("output.xlsx", sheet_name= "Sentences")
             
 
 if __name__ == "__main__":

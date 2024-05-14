@@ -1,6 +1,15 @@
+"""
+Usage: python .\EIT-Item-Extractor.py
+
+Optional parameters: --pickle (or --no-pickle) - defaults to False
+    This is used to save some time when loading the ZipfLexicon. 
+    If you're running the program for the first time, use the --no-pickle Flag or leave blank.
+    If Lexicon Pickle already exists in your current directory, use --pickle.
+"""
 from datetime import datetime
 start = datetime.now()
 
+import argparse
 import re
 import random
 import pandas as pd
@@ -156,21 +165,21 @@ class EITItemExtractor():
             print(f"{datetime.now() - start}: Item of length {syllableCount} has been added. ({itemsOfCurrentLen + 1}/{perLength})")
         
         print(f"All items found after {cycleCount} cycles. ({maxItemCount} total items)")
+        # Write sentences to file (sorted by length)
         self.items.sort_values('Syllables', ascending=True).to_excel("output.xlsx", sheet_name= "Sentences")
             
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--pickle', action=argparse.BooleanOptionalAction, default=False)
+    parser.parse_args(['--no-pickle'])
+    hasPickle = parser.parse_args().pickle
+
     itemExtractor = EITItemExtractor()
-    itemExtractor.load_lexicon('ZipfLexicon', isPickled=True)
+    itemExtractor.load_lexicon('ZipfLexicon', isPickled = hasPickle)
     itemExtractor.load_sentences(['OpenSubtitles.tok', 'deu-com_web_2021_10K-sentences.txt'])
     itemExtractor.init_pipeline()
     itemExtractor.choose_items(minLen=7, maxLen=30, perLength=5)
-    # Write sentences to file (sorted by length)
-
     print("Program ended in: ", datetime.now() - start)
-
-    # TODO: Ask if searching the lexicon by lemma makes sense.
-    # TODO: Ask if splitting all lenghts into 3 equally big groups makes sense. More, less groups? Nor equal?
-    # TODO: How should the zipfs be divided between these groups?
 
 

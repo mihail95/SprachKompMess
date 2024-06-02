@@ -1,5 +1,5 @@
 """
-Usage: python .\EIT-Item-Extractor.py
+Usage: python EIT-Item-Extractor.py
 
 Optional parameters: --pickle (or --no-pickle) - defaults to False
     This is used to save some time when loading the ZipfLexicon. 

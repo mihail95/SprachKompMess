@@ -1,4 +1,4 @@
 *.tok
 *.pickle
-*.xlsx
+ItemExtractor/*.xlsx
 *.txt

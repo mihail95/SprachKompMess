@@ -25,7 +25,7 @@ class EITItemExtractor():
         self.sentences = []
         self.lexicon = {}
         self.checkedIndeces = set()
-        self.pipeline = None
+        self.pipeline = self.init_pipeline()
         self.items = pd.DataFrame(columns=['Sentence', 'Syllables', 'LowestZipfWord', 'LowestZipfScore', 'NoPropNouns', 'NoNumbers', 'HasVerb', 'NoAbbrev'])
         # Max - Min Combined Zipf = 7.37 - 0.7 (7 - 1 if rounded)
         # Hard-coded for now - maybe change later 
@@ -65,11 +65,12 @@ class EITItemExtractor():
                     currentSentence = re.sub(r"  ", " ", currentSentence)
                     self.sentences.append(currentSentence)
 
-    def init_pipeline(self) -> None:
+    def init_pipeline(self):
         """Initializes the spacy pipeline""" 
         nlp = spacy.load("de_core_news_sm")
         nlp.add_pipe("syllables", after="tagger", config={"lang": "de_DE"})
-        self.pipeline = nlp
+
+        return nlp
 
     def generate_unique_random_int(self) -> int:
         """Generates a random integer, not included in the checkedIndeces set and adds it to it"""
@@ -178,7 +179,6 @@ if __name__ == "__main__":
     itemExtractor = EITItemExtractor()
     itemExtractor.load_lexicon('ZipfLexicon', isPickled = hasPickle)
     itemExtractor.load_sentences(['OpenSubtitles.tok', 'deu-com_web_2021_10K-sentences.txt'])
-    itemExtractor.init_pipeline()
     itemExtractor.choose_items(minLen=7, maxLen=30, perLength=5)
     print("Program ended in: ", datetime.now() - start)
 

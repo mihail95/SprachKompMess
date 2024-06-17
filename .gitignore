@@ -2,3 +2,4 @@
 *.pickle
 ItemExtractor/*.xlsx
 *.txt
+.venv

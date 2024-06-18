@@ -15,4 +15,7 @@
 #### Essays
 * Integrated Essays - Prompt + Context Text
 * Independent Esssays - nur Prompt
+
 **Essay Scoring**
+* Längere Texte
+* 
